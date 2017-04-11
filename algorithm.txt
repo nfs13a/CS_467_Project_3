@@ -15,3 +15,5 @@ loop until game is over, keep and flip bool to determine whose turn it is
 at end, allow outcome to propogate through arrays of chosen moves, then overwrite maps values with these values
 
 at end, write maps to csv's
+
+to train, run for a certain amount of clock time (loop while time passed < desired training time)
