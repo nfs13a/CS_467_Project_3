@@ -1,0 +1,17 @@
+read states from csv's, store in maps
+
+class for player, subclasses for crosses and noughts
+
+loop until game is over, keep and flip bool to determine whose turn it is
+
+	at new turn, number of possible moves should be equal to number of empty spaces in the string
+
+		if state does not exist, create it in map, assign value of .5
+
+		consider every possible state
+
+		store every move (chosen new state) in an array in the c/n object
+
+at end, allow outcome to propogate through arrays of chosen moves, then overwrite maps values with these values
+
+at end, write maps to csv's
