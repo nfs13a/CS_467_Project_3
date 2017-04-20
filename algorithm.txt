@@ -17,3 +17,13 @@ at end, allow outcome to propogate through arrays of chosen moves, then overwrit
 at end, write maps to csv's
 
 to train, run for a certain amount of clock time (loop while time passed < desired training time)
+
+Disallow:
+bad human input
+bad human piece input
+bad human move input
+
+Add in:
+format board display
+to do from canvas
+use of a learning factor
