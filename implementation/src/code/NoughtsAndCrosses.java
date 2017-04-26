@@ -24,6 +24,7 @@ abstract class Agent {
 	protected String filename;
 	protected int explorationVsEvaluation;	//1 for exploration, -1 for evaluation, 0 for standard weighting
 	private boolean shouldLearn;
+	private boolean playingHuman;
 	
 	protected Agent(double lF, double dc, String filename) {
 		learningFactor = lF;
@@ -53,6 +54,8 @@ abstract class Agent {
 		explorationVsEvaluation = 0;
 		
 		shouldLearn = true;
+		
+		playingHuman = true;
 	}
 	
 	abstract protected Vector<String> getNextStates(String gameState);
@@ -67,6 +70,14 @@ abstract class Agent {
 	
 	public String chooseNextState(String current) {
 		Vector<String> options = getNextStates(current);
+		
+		if (playingHuman) {
+			System.out.println("Computer Options: ");
+			for (String str : options) {
+				System.out.println(str);
+			}
+		}
+		
 		addNewStates(options);
 		
 		double oddsSum = 0.0;
@@ -162,6 +173,10 @@ abstract class Agent {
 		} catch (IOException e) {	//bad input from file
 			e.printStackTrace();
 		}
+	}
+
+	public void playingHuman() {
+		playingHuman = true;
 	}
 }
 
@@ -302,6 +317,8 @@ public class NoughtsAndCrosses {
 		if (difficulty.equalsIgnoreCase("D")) {
 			c.setDumb();
 		}
+		
+		c.playingHuman();
 		
 		boolean XTurn = true;
 		
