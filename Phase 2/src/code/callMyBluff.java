@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Stack;
 import java.util.Vector;
@@ -167,7 +168,7 @@ class Player {
 		
 		//TODO when evaluating a number, look at revealedDice, then look at own dice, ignoring that have already been revealed
 		
-		chosenMoves.push(new Pair(currentState,decision));
+		chosenMoves.push(new Pair<String, Integer>(currentState,decision));
 		return decision;
 	}
 	
@@ -256,9 +257,9 @@ class Player {
 		try {
 			String currentDir = new File("").getAbsolutePath();
 			BufferedWriter bw = new BufferedWriter(new FileWriter(currentDir + "\\bluffPlayer.csv"));
-			Iterator it = states.entrySet().iterator();
+			Iterator<Map.Entry<String,Double[]>> it = states.entrySet().iterator();
 		    while (it.hasNext()) {
-		        Map.Entry pair = (Map.Entry)it.next();
+		        Entry<String, Double[]> pair = it.next();
 		        String write = (String) pair.getKey();
 		        Double[] values = (Double[]) pair.getValue();
 		        for (int i = 0; i < 4; i++) {
@@ -289,10 +290,10 @@ public class callMyBluff {
 	 * 		if on a star space, next is space * 2
 	 * but this is probably not a necessary variable
 	 */
-	private final String[] spaces = {"1", "1S", "2", "3", "2S", "4", "5", "3S", "6", "7", "4S", "8", "9", "5S", "10", "11", "6S", "12", "13", "7S", "14", "15", "8S", "16", "17", "9S", "18", "19", "10S", "20"};
+	//private final String[] spaces = {"1", "1S", "2", "3", "2S", "4", "5", "3S", "6", "7", "4S", "8", "9", "5S", "10", "11", "6S", "12", "13", "7S", "14", "15", "8S", "16", "17", "9S", "18", "19", "10S", "20"};
 	
 	private Vector<Player> players;	//all players that we have
-	private Bet previousBet;
+	private Bet previousBet;	//TODO might consider storing the previous Bet as a state in the Bet object
 	private Bet currentBet;
 	private Vector<Integer> revealedDice;
 	private int winner;
