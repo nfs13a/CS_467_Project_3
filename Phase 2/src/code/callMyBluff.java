@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Random;
 import java.util.Stack;
 import java.util.Vector;
 
@@ -78,6 +79,7 @@ class Player {
 	private Vector<Boolean> revealedDice;	//parallel with dice to state which dice have been revealed or not
 	private static Map<String, Double[]> states = null;	//shared state-action pairs across all players
 	private Stack<Pair<String,Integer>> chosenMoves;	//list of chosen moves, mapping which move chosen {0..3} to state
+	private int explorationVsEvaluation; 	//-1 for exploitation, 0 for standard, 1 for exploration
 	
 	public Player(int numDice) {
 		dice = new Vector<Integer>(numDice);
@@ -104,24 +106,77 @@ class Player {
 			}
 			learningFactor = .3;
 			decay = .01;
+			
+			explorationVsEvaluation = 0;	//stay with default for now
 		}
 	}
 	
-	public int chooseAction(Bet currentBet, Vector<Integer> revealedDice) {
-		//TODO when evaluating a number, look at revealedDice, then look at own dice, ignoring that have already been revealed
-		int decision = -1;
+	public int chooseAction(Bet currentBet, Vector<Integer> revealedDice, int totalDice) {
+		//TODO get current state from revealedDice and player's dice, only caring about what does and does not apply to the current bet
+		String currentState = "";
 		
-		//TODO this needs to be changed
-		chosenMoves.push(new Pair(revealedDice.toString(),decision));
+		//TODO currentState is a string of number of (B)et dice, (N)ot bet dice, and (U)nknown dice
+		
+		//insert currentState with default .5 values if it has not been seen before
+		if (!states.containsKey(currentState)) {
+			Double[] temp = {.5,.5,.5,.5};
+			states.put(currentState, temp);
+		}
+		
+		double oddsSum = 0.0;
+		Double[] currentOdds = states.get(currentState);
+		//need to loop here to get the sum of the odds so that we can generate the random number to make the decision
+		for (double i : currentOdds) {
+			if (explorationVsEvaluation == 0) {
+				oddsSum += i;
+			} else if (explorationVsEvaluation == 1) {	//exploration
+				oddsSum += 1 - i;
+			} else {	//exploitation
+				oddsSum += 2 * i;
+			}
+			
+		}
+		
+		Random generator = new Random();
+		double stateChooser = generator.nextDouble() * oddsSum;
+		
+		//calculate decision
+		int decision = -1;
+		oddsSum = 0.0;
+		for (int i = 0; i < 4; i++) {
+			double nextOdds;
+			if (explorationVsEvaluation == 0) {
+				nextOdds = currentOdds[i];
+			} else if (explorationVsEvaluation == 1) {	//exploration
+				nextOdds = 1 - currentOdds[i];
+			} else {	//exploitation
+				nextOdds = 2 * currentOdds[i];
+			}
+			
+			if (stateChooser >= oddsSum && stateChooser <= oddsSum + nextOdds) {
+				decision = i;
+				break;
+			}
+			
+			oddsSum += nextOdds;
+		}
+		
+		if (decision == -1) {
+			decision = 3;
+		}
+		
+		//TODO when evaluating a number, look at revealedDice, then look at own dice, ignoring that have already been revealed
+		
+		chosenMoves.push(new Pair(currentState,decision));
 		return decision;
 	}
 	
-	public Bet betProb(Bet currentBet, Vector<Integer> revealedDice) {
+	public Bet betProb(Bet currentBet, Vector<Integer> revealedDice, int totalDice) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 	
-	public Bet betBluff(Bet currentBet, Vector<Integer> revealedDice) {
+	public Bet betBluff(Bet currentBet, Vector<Integer> revealedDice, int totalDice) {
 		// TODO later
 		return null;
 	}
@@ -241,6 +296,7 @@ public class callMyBluff {
 	private Bet currentBet;
 	private Vector<Integer> revealedDice;
 	private int winner;
+	private int totalDice;
 	
 	public callMyBluff() {
 		for (int i = 0; i < 6; i++) {
@@ -251,6 +307,8 @@ public class callMyBluff {
 		currentBet = new Bet();
 		
 		revealedDice = new Vector<Integer>();
+		
+		totalDice = 30;
 	}
 	
 	/**
@@ -316,20 +374,28 @@ public class callMyBluff {
 		int pTurn = 0;
 		
 		while (!checkForCompletion()) {
+			totalDice = 0;
 			for (int i = 0; i < players.size(); i++) {
 				players.get(i).roll();
+				totalDice += players.get(i).getDiceNum();
 			}
 			while (true) {
 				if (players.get(pTurn).getDiceNum() > 0) {
-					int choice = players.get(pTurn).chooseAction(currentBet, revealedDice);
+					int choice = players.get(pTurn).chooseAction(currentBet, revealedDice, totalDice);
 					Bet nextBet = null;
+					/*
+					 * 0 - the player called the bluff
+					 * 1 - the player called Spot On
+					 * 2 - the player decides to bet based on probability
+					 * 3 - the player decides to bluff
+					 */
 					switch (choice) {
 						case 0: pTurn = handleCall(pTurn); break;
 						case 1: pTurn = handleSpotOn(pTurn); break;
-						case 2: nextBet = players.get(pTurn).betProb(currentBet, revealedDice);
+						case 2: nextBet = players.get(pTurn).betProb(currentBet, revealedDice, totalDice);
 								nextBet.setPerson(pTurn);
 								break;
-						case 3: nextBet = players.get(pTurn).betBluff(currentBet, revealedDice);
+						case 3: nextBet = players.get(pTurn).betBluff(currentBet, revealedDice, totalDice);
 								nextBet.setPerson(pTurn);
 								break;
 					}
@@ -342,7 +408,7 @@ public class callMyBluff {
 						break;
 					}
 				}
-				pTurn = (pTurn + 1) % players.size(); 
+				pTurn = (pTurn + 1) % players.size();
 			}
 		}
 		
