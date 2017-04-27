@@ -16,24 +16,25 @@ import java.util.Vector;
 import javafx.util.Pair;
 
 class Bet {
-	private int space;	//also Count
-	private int number;
-	private boolean isStar;
-	private int person;
+	private int space;	//also Count; the number on the board that is bet
+	private int number;	// the side of the die that is bet on the space
+	private boolean isStar; //0 represents a star, but this flag is a more elegant way to handle it
+	private int person;	//integer identifier of player that made the Bet
 	
-	public Bet() {
+	public Bet() {	//set default that will be overridden anyway
 		space = 1;
 		number = 0;
 		isStar = false;
 		person = -1;
 	}
 	
-	public Bet(int s, int n, boolean iS) {
+	public Bet(int s, int n, boolean iS) {	//set the Bet space values
 		space = s;
 		number = n;
 		isStar = iS;
 	}
 	
+	/*getters and setters*/
 	public int getSpace() {
 		return space;
 	}
@@ -46,7 +47,7 @@ class Bet {
 		return isStar;
 	}
 	
-	public void setPerson(int p) {
+	public void setPerson(int p) {	//the person who makes the Bet is known slightly later in the game loop, so we set it after the constructor
 		 person = p;
 	}
 	
@@ -54,22 +55,28 @@ class Bet {
 		return person;
 	}
 	
-	public static int incrementSpace(int previous, int space) {
-		if (previous >= space) {	//on star
-			return space * 2;
-		} else if (space % 2 == 0) {	//on post-star
-			return space + 1;
+	/**
+	 * here because we might need it in callMyBluff and Player, and it fits here
+	 * @param previous - old bet space, which we need to know to determine if we are on a Star or not
+	 * @param space - current bet space
+	 * @return
+	 */
+	public static int incrementSpace(int previous, int current) {
+		if (previous >= current) {	//on star
+			return current * 2;
+		} else if (current % 2 == 0) {	//on post-star
+			return current + 1;
 		}
-		return (space + 1) / 2;	//on pre-star
+		return (current + 1) / 2;	//on pre-star
 	}
 }
 
 class Player {
-	private Vector<Integer> dice;
-	private double learningFactor;
-	private double decay;
-	private Vector<Boolean> revealedDice;
-	private static Map<String, Double[]> states = null;
+	private Vector<Integer> dice;	//all dice that the user has
+	private double learningFactor;	//degree to which we change values of actions taken
+	private double decay;			//degree to which we degrade the value given to taken actions
+	private Vector<Boolean> revealedDice;	//parallel with dice to state which dice have been revealed or not
+	private static Map<String, Double[]> states = null;	//shared state-action pairs across all players
 	private Stack<Pair<String,Integer>> chosenMoves;	//list of chosen moves, mapping which move chosen {0..3} to state
 	
 	public Player(int numDice) {
@@ -101,10 +108,10 @@ class Player {
 	}
 	
 	public int chooseAction(Bet currentBet, Vector<Integer> revealedDice) {
-		//when evaluating a number, look at revealedDice, then look at own dice, ignoring that have already been revealed
+		//TODO when evaluating a number, look at revealedDice, then look at own dice, ignoring that have already been revealed
 		int decision = -1;
 		
-		//this needs to be changed
+		//TODO this needs to be changed
 		chosenMoves.push(new Pair(revealedDice.toString(),decision));
 		return decision;
 	}
@@ -115,6 +122,7 @@ class Player {
 	}
 	
 	public Bet betBluff(Bet currentBet, Vector<Integer> revealedDice) {
+		// TODO later
 		return null;
 	}
 	
@@ -131,15 +139,21 @@ class Player {
 		return count;
 	}
 	
-	void loseDice(int num) {
-		for (int i = 0; i < num; i++) {
-			dice.remove(i);
+	public void loseDice(int num) {
+		while (dice.size() > 0 && num > 0) {
+			dice.remove(0);
+			num--;
 		}
+	}
+	
+	public void gainDie() {
+		dice.add(0);
 	}
 	
 	void roll() {
 		for (int i = 0; i < dice.size(); i++) {
 			dice.set(i, (int) (Math.random() * 6));
+			revealedDice.set(i, false);
 		}
 	}
 	
@@ -148,14 +162,14 @@ class Player {
 			if (keep.contains(dice.get(i))) {
 				revealedDice.set(i, true);
 			} else {
-				dice.set(i, (int) (Math.random() * 6));
+				if (!revealedDice.get(i)) {	//this statement will never be necessary with good user input
+					dice.set(i, (int) (Math.random() * 6));
+				}
 			}
 		}
 	}
 	
-	public void learn(boolean won) {
-		//modify taken paths
-		
+	public void learn(boolean won) {		
 		decay = (chosenMoves.size() * 1.0) / 100;
 		
 		int i = 0;
@@ -218,10 +232,11 @@ public class callMyBluff {
 	 * 		if on an odd space, next is space + 1 % 2 for stars
 	 * 		if on an even space, next is space + 1
 	 * 		if on a star space, next is space * 2
+	 * but this is probably not a necessary variable
 	 */
 	private final String[] spaces = {"1", "1S", "2", "3", "2S", "4", "5", "3S", "6", "7", "4S", "8", "9", "5S", "10", "11", "6S", "12", "13", "7S", "14", "15", "8S", "16", "17", "9S", "18", "19", "10S", "20"};
 	
-	private Vector<Player> players;
+	private Vector<Player> players;	//all players that we have
 	private Bet previousBet;
 	private Bet currentBet;
 	private Vector<Integer> revealedDice;
@@ -301,6 +316,9 @@ public class callMyBluff {
 		int pTurn = 0;
 		
 		while (!checkForCompletion()) {
+			for (int i = 0; i < players.size(); i++) {
+				players.get(i).roll();
+			}
 			while (true) {
 				if (players.get(pTurn).getDiceNum() > 0) {
 					int choice = players.get(pTurn).chooseAction(currentBet, revealedDice);
