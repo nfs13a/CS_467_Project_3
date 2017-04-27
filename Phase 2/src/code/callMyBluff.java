@@ -196,6 +196,10 @@ class Player {
 	}
 	
 	public void loseDice(int num) {
+		if (dice.isEmpty()) {
+			System.out.println("Attempting to remove " + num + " dice from a player with no dice.");
+			return;
+		}
 		while (dice.size() > 0 && num > 0) {
 			dice.remove(0);
 			num--;
@@ -323,8 +327,12 @@ public class callMyBluff {
 		}
 		
 		if (count == currentBet.getSpace()) {
-			//not sure what to do
-			return -1;	//not sure who to return here
+			for (int i = 0; i < players.size(); i++) {
+				if (players.get(i).getDiceNum() > 0 && i != currentBet.getPerson()) {
+					players.get(i).loseDice(1);
+				}
+			}
+			return currentBet.getPerson();
 		} else if (count > currentBet.getSpace()) {
 			players.elementAt(caller).loseDice(count - currentBet.getSpace());
 			return caller;
@@ -348,6 +356,8 @@ public class callMyBluff {
 			for (int i = 0; i < players.size(); i++) {
 				if (players.get(i).getDiceNum() > 0 && i != caller) {
 					players.get(i).loseDice(1);
+				} else if (i == caller) {
+					players.get(i).gainDie();
 				}
 			}
 			return caller;
