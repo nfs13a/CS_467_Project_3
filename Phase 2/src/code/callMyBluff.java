@@ -36,9 +36,19 @@ class Bet {
 		isStar = iS;
 	}
 	
+	public Bet(Bet original) {
+		space = original.getSpace();
+		number = original.getNumber();
+		isStar = original.isStar();
+	}
+	
 	/*getters and setters*/
 	public int getSpace() {
 		return space;
+	}
+	
+	public void setNumber(int n) {
+		number = n;
 	}
 	
 	public int getNumber() {
@@ -70,6 +80,18 @@ class Bet {
 			return current + 1;
 		}
 		return (current + 1) / 2;	//on pre-star
+	}
+	
+	public static Bet incrementBet(Bet current) {
+		if (current.isStar()) {
+			return new Bet(current.getSpace() * 2, 0, false);
+		} else {
+			if (current.getSpace() % 2 == 0) {
+				return new Bet(current.getSpace() + 1, 0, false);
+			} else {
+				return new Bet((current.getSpace() + 1) / 2, 0, true);
+			}
+		}
 	}
 }
 
@@ -112,11 +134,35 @@ class Player {
 		}
 	}
 	
-	public int chooseAction(Bet currentBet, Vector<Integer> revealedDice, int totalDice) {
-		//TODO get current state from revealedDice and player's dice, only caring about what does and does not apply to the current bet
+	public int chooseAction(Bet currentBet, Vector<Integer> rD, int totalDice) {
+		//get current state from revealedDice and player's dice, only caring about what does and does not apply to the current bet
 		String currentState = "";
 		
-		//TODO currentState is a string of number of (B)et dice, (N)ot bet dice, and (U)nknown dice
+		for (int i : rD) {
+			if (i == currentBet.getSpace())
+				currentState += "B";
+			else
+				currentState += "N";
+		}
+		
+		int playersRevealedCount = 0;
+		for (int i = 0; i < dice.size(); i++) {
+			if (!revealedDice.get(i)) {
+				currentState += "B";
+			} else {
+				playersRevealedCount++;
+			}
+		}
+		
+		for (int i = 0; i < totalDice - (rD.size() + (dice.size() - playersRevealedCount)); i++) {
+			currentState += "U";
+		}
+		
+		if (currentState.length() != totalDice) {
+			System.out.println("Error: calculated the incorrect total dice for state: " + currentState);
+		}
+		
+		//currentState is a string of number of (B)et dice, (N)ot bet dice, and (U)nknown dice
 		
 		//insert currentState with default .5 values if it has not been seen before
 		if (!states.containsKey(currentState)) {
@@ -166,20 +212,74 @@ class Player {
 			decision = 3;
 		}
 		
-		//TODO when evaluating a number, look at revealedDice, then look at own dice, ignoring that have already been revealed
-		
 		chosenMoves.push(new Pair<String, Integer>(currentState,decision));
 		return decision;
 	}
 	
-	public Bet betProb(Bet currentBet, Vector<Integer> revealedDice, int totalDice) {
-		// TODO Auto-generated method stub
-		return null;
+	public Bet betProb(Bet currentBet, Vector<Integer> rD, int totalDice) {
+		//bet on side with most occurrences, only increment count if needed 
+		int largest = 1;
+		
+		int diceCount[] = {0,0,0,0,0,0};
+		
+		for (int i = 0; i < 6; i++) {
+			//count number of sides of dice that have been revealed
+			for (int j : rD) {
+				if (j == 0 || j == currentBet.getSpace()) {
+					diceCount[i]++;
+				}
+			}
+			//count number of sides of dice that player has and have not been revealed
+			for (int j = 0; j < dice.size(); j++) {
+				if (!revealedDice.get(j) && (j == 0 || j == currentBet.getSpace())) {
+					diceCount[i]++;
+				}
+			}
+			if (i > 0 && diceCount[i] >= diceCount[largest]) {
+				largest = i;
+			}
+		}
+		
+		if (diceCount[0] >= diceCount[largest] * 2) {
+			largest = 0;
+		}
+		
+		Bet newBet = new Bet(currentBet);
+		if (largest == 0) {
+			while (!newBet.isStar() || newBet.getSpace() == currentBet.getSpace()) {
+				newBet = Bet.incrementBet(newBet);
+			}
+		} else {
+			while (newBet.isStar() || (newBet.getSpace() == currentBet.getSpace() && newBet.getNumber() < currentBet.getNumber())) {
+				newBet = Bet.incrementBet(newBet);
+			}
+			newBet.setNumber(largest);
+		}
+		
+		return newBet;
 	}
 	
 	public Bet betBluff(Bet currentBet, Vector<Integer> revealedDice, int totalDice) {
-		// TODO later
-		return null;
+		Bet newBet = new Bet(currentBet);
+		
+		boolean numBetMaxed = currentBet.getNumber() == 5 || currentBet.isStar();
+		int rand = numBetMaxed ? (int) (Math.random() * 5 + 1) : (int) (Math.random() * 6); 
+		
+		for (int i = 0; i < rand; i++) {
+			newBet = Bet.incrementBet(newBet);
+		}
+		
+		if (!numBetMaxed && rand == 0) {	//bluff between currentBet number and 5
+			newBet.setNumber((int) (Math.random() * (5 - currentBet.getNumber()) + currentBet.getNumber()));	//attempting to generate a random integer on [currentBet.getNumber(), 5]
+		} else {	//bluff between 1 and 5, or star
+			if (newBet.isStar()) {
+				newBet.setNumber(0);
+			} else {
+				newBet.setNumber((int) (Math.random() * 5 + 1));
+			}
+		}
+		
+		return newBet;
 	}
 	
 	int getDiceNum() {
@@ -202,6 +302,7 @@ class Player {
 		}
 		while (dice.size() > 0 && num > 0) {
 			dice.remove(0);
+			revealedDice.remove(0);
 			num--;
 		}
 	}
