@@ -685,21 +685,21 @@ public class callMyBluff {
 	public static void main(String[] args) {
 		System.out.println("Program Start\n\n\n");
 		//for (int i = 0; i < 1000; i++) {
-		DateFormat df = new SimpleDateFormat("HH");
-		DateFormat dfAlt = new SimpleDateFormat("HH:mm");
-		int i = 0;
-		for (Date dateobj = new Date(); !df.format(dateobj).equals("09"); dateobj = new Date()) {
-			try {
-				System.out.println("Game " + i);
+		//DateFormat df = new SimpleDateFormat("HH");
+		//DateFormat dfAlt = new SimpleDateFormat("HH:mm");
+		//int i = 0;
+		//for (Date dateobj = new Date(); !df.format(dateobj).equals("09"); dateobj = new Date()) {
+			//try {
+				//System.out.println("Game " + i);
 				callMyBluff cMB = new callMyBluff();
 				cMB.train();
-				i++;
-			} catch (Exception e) {
+				//i++;
+			/*} catch (Exception e) {
 				System.out.println("Error occurred at " + dfAlt.format(dateobj) + " during game " + i + ".");
 				e.printStackTrace();
 			}
 		}
 		System.out.println("###########################################################################\nTraining Complete\n###########################################################################");
-		System.out.println("Played " + i + " games.");
+		System.out.println("Played " + i + " games.");*/
 	}
 }
