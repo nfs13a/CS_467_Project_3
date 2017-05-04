@@ -7,6 +7,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -24,7 +27,7 @@ class Bet {
 	private int person;	//integer identifier of player that made the Bet
 	
 	public Bet() {	//set default that will be overridden anyway
-		space = 1;
+		space = 0;
 		number = 0;
 		isStar = false;
 		person = -1;
@@ -83,6 +86,10 @@ class Bet {
 	}
 	
 	public static Bet incrementBet(Bet current) {
+		if (current.getSpace() == 0) {
+			//System.out.println("Going past starting bet.");
+			return new Bet(1, 0, false);
+		}
 		if (current.isStar()) {
 			return new Bet(current.getSpace() * 2, 0, false);
 		} else {
@@ -108,7 +115,9 @@ class Player {
 		dice = new Vector<Integer>(numDice);
 		revealedDice = new Vector<Boolean>(numDice);
 		for (int i = 0; i < numDice; i++) {
-			revealedDice.set(i, false);
+			dice.add(0);
+			revealedDice.add(i, false);
+			//revealedDice.set(i, false);
 		}
 		if (states == null) {
 			states = new HashMap<String, Double[]>();
@@ -121,37 +130,109 @@ class Player {
 					Double[] temp = {Double.parseDouble(itemInfo[1]),Double.parseDouble(itemInfo[2]),Double.parseDouble(itemInfo[3]),Double.parseDouble(itemInfo[4])};
 					states.put(itemInfo[0], temp);
 				}
+				//System.out.println("Read " + states.size() + " states.");
 				br.close();
 			} catch (FileNotFoundException e) {	//file not found, oops
 				e.printStackTrace();
 			} catch (IOException e) {	//bad input from file
 				e.printStackTrace();
-			}
-			learningFactor = .3;
-			decay = .01;
-			
-			explorationVsEvaluation = 0;	//stay with default for now
+			}	
 		}
+		
+		chosenMoves = new Stack<>();
+		learningFactor = .3;
+		decay = .001;
+		
+		explorationVsEvaluation = 0;	//stay with default for now
 	}
 	
 	public int chooseAction(Bet currentBet, Vector<Integer> rD, int totalDice) {
-		//get current state from revealedDice and player's dice, only caring about what does and does not apply to the current bet
 		String currentState = "";
 		
+		if (currentBet.getSpace() == 0) {	//player gets first bet
+			
+			for (int i = 0; i < totalDice; i++) {
+				currentState += "U";
+			}
+			
+			if (!states.containsKey(currentState)) {
+				Double[] temp = {0.0,0.0,.5,.5};	//on starting move, must bet
+				states.put(currentState, temp);
+			}
+			
+			double oddsSum = 0.0;
+			Double[] currentOdds = states.get(currentState);
+			//need to loop here to get the sum of the odds so that we can generate the random number to make the decision
+			for (int i = 2; i < 4; i++) {
+				if (explorationVsEvaluation == 0) {
+					oddsSum += i;
+				} else if (explorationVsEvaluation == 1) {	//exploration
+					oddsSum += 1 - i;
+				} else {	//exploitation
+					oddsSum += 2 * i;
+				}
+			}
+			
+			Random generator = new Random();
+			double stateChooser = generator.nextDouble() * oddsSum;
+			
+			//calculate decision
+			int decision = -1;
+			oddsSum = 0.0;
+			for (int i = 2; i < 4; i++) {
+				double nextOdds;
+				if (explorationVsEvaluation == 0) {
+					nextOdds = currentOdds[i];
+				} else if (explorationVsEvaluation == 1) {	//exploration
+					nextOdds = 1 - currentOdds[i];
+				} else {	//exploitation
+					nextOdds = 2 * currentOdds[i];
+				}
+				
+				if (stateChooser >= oddsSum && stateChooser <= oddsSum + nextOdds) {
+					decision = i;
+					break;
+				}
+				
+				oddsSum += nextOdds;
+			}
+			
+			if (decision == -1) {
+				decision = 3;
+			}
+			
+			chosenMoves.push(new Pair<String, Integer>(currentState,decision));
+			
+			return decision;
+		}
+		//get current state from revealedDice and player's dice, only caring about what does and does not apply to the current bet
+		int countOfSeen[] = {0,0};	//B,N,U
+		
 		for (int i : rD) {
-			if (i == currentBet.getSpace())
-				currentState += "B";
+			if (i == currentBet.getNumber())
+				countOfSeen[0]++;
 			else
-				currentState += "N";
+				countOfSeen[1]++;
 		}
 		
 		int playersRevealedCount = 0;
 		for (int i = 0; i < dice.size(); i++) {
 			if (!revealedDice.get(i)) {
-				currentState += "B";
+				if (i == currentBet.getSpace()) {
+					countOfSeen[0]++;	
+				} else {
+					countOfSeen[1]++;
+				}
 			} else {
 				playersRevealedCount++;
 			}
+		}
+		
+		for (int i = 0; i < countOfSeen[0]; i++) {
+			currentState += "B";
+		}
+		for (int i = 0; i < countOfSeen[1]; i++) {
+			currentState += "N";
 		}
 		
 		for (int i = 0; i < totalDice - (rD.size() + (dice.size() - playersRevealedCount)); i++) {
@@ -169,6 +250,8 @@ class Player {
 			Double[] temp = {.5,.5,.5,.5};
 			states.put(currentState, temp);
 		}
+		
+		//System.out.println("State " + currentState + " was seen.");
 		
 		double oddsSum = 0.0;
 		Double[] currentOdds = states.get(currentState);
@@ -217,6 +300,7 @@ class Player {
 	}
 	
 	public Bet betProb(Bet currentBet, Vector<Integer> rD, int totalDice) {
+		//System.out.println("Entered betProb");
 		//bet on side with most occurrences, only increment count if needed 
 		int largest = 1;
 		
@@ -225,13 +309,16 @@ class Player {
 		for (int i = 0; i < 6; i++) {
 			//count number of sides of dice that have been revealed
 			for (int j : rD) {
-				if (j == 0 || j == currentBet.getSpace()) {
+				//System.out.println("revealed: " + j);
+				//if (j == 0 || j == currentBet.getSpace()) {
+				if (j == 0 || j == i) {
 					diceCount[i]++;
 				}
 			}
 			//count number of sides of dice that player has and have not been revealed
 			for (int j = 0; j < dice.size(); j++) {
-				if (!revealedDice.get(j) && (j == 0 || j == currentBet.getSpace())) {
+				//if (!revealedDice.get(j) && (j == 0 || j == currentBet.getSpace())) {
+				if (!revealedDice.get(j) && (j == 0 || j == i)) {
 					diceCount[i]++;
 				}
 			}
@@ -250,7 +337,7 @@ class Player {
 				newBet = Bet.incrementBet(newBet);
 			}
 		} else {
-			while (newBet.isStar() || (newBet.getSpace() == currentBet.getSpace() && newBet.getNumber() < currentBet.getNumber())) {
+			while (newBet.isStar() || (newBet.getSpace() == currentBet.getSpace() && newBet.getNumber() <= currentBet.getNumber())) {
 				newBet = Bet.incrementBet(newBet);
 			}
 			newBet.setNumber(largest);
@@ -279,6 +366,11 @@ class Player {
 			}
 		}
 		
+		/*if (newBet.getSpace() == currentBet.getSpace() && newBet.getNumber() == currentBet.getNumber()) {
+			System.out.println("##############\nError, new bet was the same as previous\n##############");
+			throw new UnknownError();
+		}*/
+		
 		return newBet;
 	}
 	
@@ -288,10 +380,13 @@ class Player {
 	
 	public int getNumDiceNum(int val) {
 		int count = 0;
+		System.out.print("Player has |");
 		for (int i : dice) {
-			if (i == val)
+			System.out.print(i + "|");
+			if (i == val || i == 0)
 				count++;
 		}
+		System.out.println("");
 		return count;
 	}
 	
@@ -309,6 +404,7 @@ class Player {
 	
 	public void gainDie() {
 		dice.add(0);
+		revealedDice.add(false);
 	}
 	
 	void roll() {
@@ -331,7 +427,8 @@ class Player {
 	}
 	
 	public void learn(boolean won) {		
-		decay = (chosenMoves.size() * 1.0) / 100;
+		//decay = (chosenMoves.size() * 1.0) / 100;
+		decay = (chosenMoves.size() * 1.0) / 10000;
 		
 		int i = 0;
 		Pair<String,Integer> move;
@@ -348,7 +445,7 @@ class Player {
 			} else {
 				Double[] diff = new Double[]{0.0,0.0,0.0,0.0};
 				for (int j = 0; j < 4; j++) {
-					diff[j] = 1 - newOdds[j];
+					diff[j] = newOdds[j];
 					if (move.getValue() == j)
 						newOdds[j] = newOdds[j] - (diff[j] * ( learningFactor - decay * i) );
 				}
@@ -359,6 +456,7 @@ class Player {
 	}
 
 	public void writeToFile() {
+		//System.out.println("Entered writeToFile to write " + states.size() + " states.");
 		try {
 			String currentDir = new File("").getAbsolutePath();
 			BufferedWriter bw = new BufferedWriter(new FileWriter(currentDir + "\\bluffPlayer.csv"));
@@ -373,12 +471,17 @@ class Player {
 		        bw.write(write + "\n");
 		        it.remove(); // avoids a ConcurrentModificationException
 		    }
+		    states = null;
 			bw.close();
 		} catch (FileNotFoundException e) {	//file not found, oops
 			e.printStackTrace();
 		} catch (IOException e) {	//bad input from file
 			e.printStackTrace();
 		}
+	}
+
+	public void reset() {
+		states = null;
 	}
 }
 
@@ -405,7 +508,9 @@ public class callMyBluff {
 	private int totalDice;
 	
 	public callMyBluff() {
-		for (int i = 0; i < 6; i++) {
+		players = new Vector<Player>();
+		
+		for (int i = 0; i < (int) (Math.random() * 4 + 2); i++) {
 			players.add(new Player(5));
 		}
 		
@@ -414,7 +519,7 @@ public class callMyBluff {
 		
 		revealedDice = new Vector<Integer>();
 		
-		totalDice = 30;
+		totalDice = players.size() * players.get(0).getDiceNum();
 	}
 	
 	/**
@@ -422,23 +527,31 @@ public class callMyBluff {
 	 * @return player identifier that should start the next round
 	 */
 	private int handleCall(int caller) {
-		int count = 0;
+		int count = 0;	//number of dice with bet side
 		for (Player p : players) {
 			count += p.getNumDiceNum(currentBet.getNumber());
 		}
+		
+		//System.out.println("Counted " + count + " dice of bet number.");
 		
 		if (count == currentBet.getSpace()) {
 			for (int i = 0; i < players.size(); i++) {
 				if (players.get(i).getDiceNum() > 0 && i != currentBet.getPerson()) {
 					players.get(i).loseDice(1);
+					totalDice--;
 				}
 			}
+			System.out.println("Bet was exactly correct.");
 			return currentBet.getPerson();
 		} else if (count > currentBet.getSpace()) {
 			players.elementAt(caller).loseDice(count - currentBet.getSpace());
+			totalDice -= count - currentBet.getSpace();
+			System.out.println("Bet was valid, " + caller + " loses " + (count - currentBet.getSpace()) + " dice.");
 			return caller;
 		} else {
 			players.elementAt(currentBet.getPerson()).loseDice(currentBet.getSpace() - count);
+			totalDice -= currentBet.getSpace() - count;
+			System.out.println("Bet was wrong, " + currentBet.getPerson() + " loses " + (currentBet.getSpace() - count) + " dice.");
 			return currentBet.getPerson();
 		}
 	}
@@ -453,17 +566,24 @@ public class callMyBluff {
 			count += p.getNumDiceNum(currentBet.getNumber());
 		}
 		
+		//System.out.println("Counted " + count + " dice of bet number.");
+		
 		if (count == currentBet.getSpace()) {
+			System.out.println("Spot-On was exactly correct.");
 			for (int i = 0; i < players.size(); i++) {
 				if (players.get(i).getDiceNum() > 0 && i != caller) {
 					players.get(i).loseDice(1);
+					totalDice--;
 				} else if (i == caller) {
 					players.get(i).gainDie();
+					totalDice++;
 				}
 			}
 			return caller;
 		} else {
+			System.out.println("Spot-On was incorrect, Player " + caller + " loses " + (Math.abs(count - currentBet.getSpace())) + " dice");
 			players.elementAt(caller).loseDice(Math.abs(count - currentBet.getSpace()));
+			totalDice -= Math.abs(count - currentBet.getSpace());
 			return currentBet.getPerson();
 		}
 	}
@@ -472,6 +592,7 @@ public class callMyBluff {
 		int playersRemainingCount = 0;
 		int i = 0;
 		for (Player p : players) {
+			System.out.println("Player " + i + " has " + p.getDiceNum() + " dice.");
 			if (p.getDiceNum() > 0) {
 				winner = i; 
 				playersRemainingCount++;
@@ -482,59 +603,103 @@ public class callMyBluff {
 		return playersRemainingCount == 1;
 	}
 	
+	private void reset() {
+		players.get(0).reset();
+		
+		players = new Vector<Player>();
+		
+		for (int i = 0; i < (int) (Math.random() * 4 + 2); i++) {
+			players.add(new Player(5));
+		}
+		
+		previousBet = new Bet();
+		currentBet = new Bet();
+		
+		revealedDice = new Vector<Integer>();
+		
+		totalDice = players.size() * players.get(0).getDiceNum();
+	}
+	
 	void train() {
-		int pTurn = 0;
-		
-		while (!checkForCompletion()) {
-			totalDice = 0;
-			for (int i = 0; i < players.size(); i++) {
-				players.get(i).roll();
-				totalDice += players.get(i).getDiceNum();
-			}
-			while (true) {
-				if (players.get(pTurn).getDiceNum() > 0) {
-					int choice = players.get(pTurn).chooseAction(currentBet, revealedDice, totalDice);
-					Bet nextBet = null;
-					/*
-					 * 0 - the player called the bluff
-					 * 1 - the player called Spot On
-					 * 2 - the player decides to bet based on probability
-					 * 3 - the player decides to bluff
-					 */
-					switch (choice) {
-						case 0: pTurn = handleCall(pTurn); break;
-						case 1: pTurn = handleSpotOn(pTurn); break;
-						case 2: nextBet = players.get(pTurn).betProb(currentBet, revealedDice, totalDice);
-								nextBet.setPerson(pTurn);
-								break;
-						case 3: nextBet = players.get(pTurn).betBluff(currentBet, revealedDice, totalDice);
-								nextBet.setPerson(pTurn);
-								break;
-					}
-					if (nextBet != null) {
-						previousBet = currentBet;
-						currentBet = nextBet;
-					}
-					
-					if (choice < 2) {
-						break;
-					}
+			int pTurn = 0;
+			int counter = 0;
+			while (!checkForCompletion()) {
+				currentBet = new Bet();
+				previousBet = new Bet();
+				//System.out.println("Total Dice: " + totalDice);
+				totalDice = 0;
+				for (int i = 0; i < players.size(); i++) {
+					players.get(i).roll();
+					totalDice += players.get(i).getDiceNum();
 				}
-				pTurn = (pTurn + 1) % players.size();
+				while (true) {
+					System.out.println("It is Player " + pTurn + "'s turn.");
+					System.out.println("The current bet is " + currentBet.getSpace() + " " + currentBet.getNumber() + "'s.");
+					if (players.get(pTurn).getDiceNum() > 0) {
+						int choice = players.get(pTurn).chooseAction(currentBet, revealedDice, totalDice);
+						//System.out.println("choice: " + choice);
+						Bet nextBet = null;
+						/*
+						 * 0 - the player called the bluff
+						 * 1 - the player called Spot On
+						 * 2 - the player decides to bet based on probability
+						 * 3 - the player decides to bluff
+						 */
+						switch (choice) {
+							case 0: pTurn = handleCall(pTurn); break;
+							case 1: pTurn = handleSpotOn(pTurn); break;
+							case 2: nextBet = players.get(pTurn).betProb(currentBet, revealedDice, totalDice);
+									nextBet.setPerson(pTurn);
+									break;
+							case 3: nextBet = players.get(pTurn).betBluff(currentBet, revealedDice, totalDice);
+									nextBet.setPerson(pTurn);
+									break;
+						}
+						if (nextBet != null) {
+							previousBet = currentBet;
+							currentBet = nextBet;
+						}
+						
+						if (choice < 2) {
+							break;
+						}
+					}/* else {
+						System.out.println("Player " + pTurn + " did not perform turn.");
+					}*/
+					
+					System.out.println("####################################\n");
+					pTurn = (pTurn + 1) % players.size();
+					counter++;
+				}
 			}
-		}
-		
-		for (int i = 0; i < players.size(); i++) {
-			players.get(pTurn).learn(players.get(pTurn).getDiceNum() > 0);
-		}
-		
-		players.get(0).writeToFile();
-		
-		System.out.println("Player " + winner + "wins!");
+			
+			for (int i = 0; i < players.size(); i++) {
+				players.get(pTurn).learn(players.get(pTurn).getDiceNum() > 0);
+			}
+			
+			players.get(0).writeToFile();
+			
+			System.out.println("Player " + winner + " wins!");
 	}
 
 	public static void main(String[] args) {
-		callMyBluff cMB = new callMyBluff();
-		cMB.train();
+		System.out.println("Program Start\n\n\n");
+		//for (int i = 0; i < 1000; i++) {
+		DateFormat df = new SimpleDateFormat("HH");
+		DateFormat dfAlt = new SimpleDateFormat("HH:mm");
+		int i = 0;
+		for (Date dateobj = new Date(); !df.format(dateobj).equals("09"); dateobj = new Date()) {
+			try {
+				System.out.println("Game " + i);
+				callMyBluff cMB = new callMyBluff();
+				cMB.train();
+				i++;
+			} catch (Exception e) {
+				System.out.println("Error occurred at " + dfAlt.format(dateobj) + " during game " + i + ".");
+				e.printStackTrace();
+			}
+		}
+		System.out.println("###########################################################################\nTraining Complete\n###########################################################################");
+		System.out.println("Played " + i + " games.");
 	}
 }
