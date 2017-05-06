@@ -9,6 +9,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -127,7 +128,7 @@ class Player {
 				String line = "";	//holds each new line
 				while ((line = br.readLine()) != null) {	//loop through lines
 					String[] itemInfo = line.split(","); 	//state,call bluff,call spot on,bet on probability,bet with bluff
-					Double[] temp = {Double.parseDouble(itemInfo[1]),Double.parseDouble(itemInfo[2]),Double.parseDouble(itemInfo[3]),Double.parseDouble(itemInfo[4])};
+					Double[] temp = {Double.parseDouble(itemInfo[1]),Double.parseDouble(itemInfo[2]),Double.parseDouble(itemInfo[3]),Double.parseDouble(itemInfo[4]),Double.parseDouble(itemInfo[5]),Double.parseDouble(itemInfo[6])};
 					states.put(itemInfo[0], temp);
 				}
 				//System.out.println("Read " + states.size() + " states.");
@@ -146,67 +147,72 @@ class Player {
 		explorationVsEvaluation = 0;	//stay with default for now
 	}
 	
-	public int chooseAction(Bet currentBet, Vector<Integer> rD, int totalDice) {
+	private int chooseFirstAction(Bet currentBet, Vector<Integer> rD, int totalDice) {	//since player has the first action, they cannot call a bluff/spot-on
 		String currentState = "";
 		
-		if (currentBet.getSpace() == 0) {	//player gets first bet
-			
-			for (int i = 0; i < totalDice; i++) {
-				currentState += "U";
-			}
-			
-			if (!states.containsKey(currentState)) {
-				Double[] temp = {0.0,0.0,.5,.5};	//on starting move, must bet
-				states.put(currentState, temp);
-			}
-			
-			double oddsSum = 0.0;
-			Double[] currentOdds = states.get(currentState);
-			//need to loop here to get the sum of the odds so that we can generate the random number to make the decision
-			for (int i = 2; i < 4; i++) {
-				if (explorationVsEvaluation == 0) {
-					oddsSum += i;
-				} else if (explorationVsEvaluation == 1) {	//exploration
-					oddsSum += 1 - i;
-				} else {	//exploitation
-					oddsSum += 2 * i;
-				}
-			}
-			
-			Random generator = new Random();
-			double stateChooser = generator.nextDouble() * oddsSum;
-			
-			//calculate decision
-			int decision = -1;
-			oddsSum = 0.0;
-			for (int i = 2; i < 4; i++) {
-				double nextOdds;
-				if (explorationVsEvaluation == 0) {
-					nextOdds = currentOdds[i];
-				} else if (explorationVsEvaluation == 1) {	//exploration
-					nextOdds = 1 - currentOdds[i];
-				} else {	//exploitation
-					nextOdds = 2 * currentOdds[i];
-				}
-				
-				if (stateChooser >= oddsSum && stateChooser <= oddsSum + nextOdds) {
-					decision = i;
-					break;
-				}
-				
-				oddsSum += nextOdds;
-			}
-			
-			if (decision == -1) {
-				decision = 3;
-			}
-			
-			chosenMoves.push(new Pair<String, Integer>(currentState,decision));
-			
-			return decision;
+		for (int i = 0; i < totalDice; i++) {
+			currentState += "U";
 		}
+		
+		if (!states.containsKey(currentState)) {
+			Double[] temp = {0.0,0.0,.5,.5,.5,.5};	//on starting move, must bet
+			states.put(currentState, temp);
+		}
+		
+		double oddsSum = 0.0;
+		Double[] currentOdds = states.get(currentState);
+		//need to loop here to get the sum of the odds so that we can generate the random number to make the decision
+		for (int i = 2; i < 4; i++) {
+			if (explorationVsEvaluation == 0) {
+				oddsSum += i;
+			} else if (explorationVsEvaluation == 1) {	//exploration
+				oddsSum += 1 - i;
+			} else {	//exploitation
+				oddsSum += 2 * i;
+			}
+		}
+		
+		Random generator = new Random();
+		double stateChooser = generator.nextDouble() * oddsSum;
+		
+		//calculate decision
+		int decision = -1;
+		oddsSum = 0.0;
+		for (int i = 2; i < 4; i++) {
+			double nextOdds;
+			if (explorationVsEvaluation == 0) {
+				nextOdds = currentOdds[i];
+			} else if (explorationVsEvaluation == 1) {	//exploration
+				nextOdds = 1 - currentOdds[i];
+			} else {	//exploitation
+				nextOdds = 2 * currentOdds[i];
+			}
+			
+			if (stateChooser >= oddsSum && stateChooser <= oddsSum + nextOdds) {
+				decision = i;
+				break;
+			}
+			
+			oddsSum += nextOdds;
+		}
+		
+		if (decision == -1) {
+			decision = 3;
+		}
+		
+		chosenMoves.push(new Pair<String, Integer>(currentState,decision));
+		
+		return decision;
+	}
+	
+	public int chooseAction(Bet currentBet, Vector<Integer> rD, int totalDice) {	
+		if (currentBet.getSpace() == 0) {	//player gets first bet
+			return chooseFirstAction(currentBet, rD, totalDice);	//simplified version of code called in this method
+		}
+		
 		//get current state from revealedDice and player's dice, only caring about what does and does not apply to the current bet
-		int countOfSeen[] = {0,0};	//B,N,U
+		String currentState = "";
+		int countOfSeen[] = {0,0};	//B,N
 		
 		for (int i : rD) {
 			if (i == currentBet.getNumber())
@@ -247,7 +253,7 @@ class Player {
 		
 		//insert currentState with default .5 values if it has not been seen before
 		if (!states.containsKey(currentState)) {
-			Double[] temp = {.5,.5,.5,.5};
+			Double[] temp = {.5,.5,.5,.5,.5,.5};
 			states.put(currentState, temp);
 		}
 		
@@ -264,7 +270,6 @@ class Player {
 			} else {	//exploitation
 				oddsSum += 2 * i;
 			}
-			
 		}
 		
 		Random generator = new Random();
@@ -343,6 +348,18 @@ class Player {
 			newBet.setNumber(largest);
 		}
 		
+		//if more N dice than bet, 1-reroll chance to reroll; if less N dice than bet reroll chance to reroll
+		double rand = Math.random();
+		String currentState = chosenMoves.peek().getKey(); 
+		
+		if (currentBet.getSpace() > 0 && ((diceCount[largest] > newBet.getSpace() && 1 - states.get(currentState)[4] <= rand) || (diceCount[largest] <= newBet.getSpace() && states.get(currentState)[4] <= rand))) {
+			chosenMoves.pop();
+			Pair<String, Integer> changedAction = new Pair<String, Integer>(currentState, 4);
+			chosenMoves.push(changedAction);
+			System.out.println("Reroll on " + largest);
+			reroll(largest);
+		}
+		
 		return newBet;
 	}
 	
@@ -371,6 +388,17 @@ class Player {
 			throw new UnknownError();
 		}*/
 		
+		double rerollRand = Math.random();
+		String currentState = chosenMoves.peek().getKey(); 
+		
+		if (currentBet.getSpace() > 0 && states.get(currentState)[5] <= rerollRand) {
+			chosenMoves.pop();
+			Pair<String, Integer> changedAction = new Pair<String, Integer>(currentState, 5);
+			chosenMoves.push(changedAction);
+			System.out.println("Reroll on " + newBet.getNumber());
+			reroll(newBet.getNumber());
+		}
+		
 		return newBet;
 	}
 	
@@ -388,6 +416,18 @@ class Player {
 		}
 		System.out.println("");
 		return count;
+	}
+	
+	public Vector<Integer> getRevealedDice() {
+		Vector<Integer> toReturn = new Vector<Integer>();
+		
+		for (int i = 0; i < dice.size(); i++) {
+			if (revealedDice.get(i)) {
+				toReturn.add(dice.get(i));
+			}
+		}
+		
+		return toReturn;
 	}
 	
 	public void loseDice(int num) {
@@ -426,6 +466,18 @@ class Player {
 		}
 	}
 	
+	void reroll(int keep) {
+		for (int i = 0; i < dice.size(); i++) {
+			if (dice.get(i) == keep || dice.get(i) == 0) {
+				revealedDice.set(i, true);
+			} else {
+				if (!revealedDice.get(i)) {
+					dice.set(i, (int) (Math.random() * 6));
+				}
+			}
+		}
+	}
+	
 	public void learn(boolean won) {		
 		//decay = (chosenMoves.size() * 1.0) / 100;
 		decay = (chosenMoves.size() * 1.0) / 10000;
@@ -436,18 +488,26 @@ class Player {
 			move = chosenMoves.pop();
 			Double[] newOdds = states.get(move.getKey());
 			if (won) {
-				Double[] diff = new Double[]{0.0,0.0,0.0,0.0};
-				for (int j = 0; j < 4; j++) {
+				Double[] diff = new Double[]{0.0,0.0,0.0,0.0,0.0,0.0};
+				for (int j = 0; j < 6; j++) {
 					diff[j] = 1 - newOdds[j];
-					if (move.getValue() == j)
+					if (move.getValue() == j) {
 						newOdds[j] = newOdds[j] + (diff[j] * ( learningFactor - decay * i) );
+						if (move.getValue() > 3) {	//rerolled in that turn, change basic decision value also
+							newOdds[j - 2] = newOdds[j - 2] + (diff[j - 2] * ( learningFactor - decay * i) );
+						}
+					}
 				}
 			} else {
-				Double[] diff = new Double[]{0.0,0.0,0.0,0.0};
-				for (int j = 0; j < 4; j++) {
+				Double[] diff = new Double[]{0.0,0.0,0.0,0.0,0.0,0.0};
+				for (int j = 0; j < 6; j++) {
 					diff[j] = newOdds[j];
-					if (move.getValue() == j)
+					if (move.getValue() == j) {
 						newOdds[j] = newOdds[j] - (diff[j] * ( learningFactor - decay * i) );
+						if (move.getValue() > 3) {	//rerolled in that turn, change basic decision value also
+							newOdds[j - 2] = newOdds[j - 2] + (diff[j - 2] * ( learningFactor - decay * i) );
+						}
+					}
 				}
 			}
 			states.put(move.getKey(), newOdds);
@@ -465,7 +525,7 @@ class Player {
 		        Entry<String, Double[]> pair = it.next();
 		        String write = (String) pair.getKey();
 		        Double[] values = (Double[]) pair.getValue();
-		        for (int i = 0; i < 4; i++) {
+		        for (int i = 0; i < 6; i++) {
 		        	write += "," + values[i];
 		        }
 		        bw.write(write + "\n");
@@ -588,6 +648,13 @@ public class callMyBluff {
 		}
 	}
 	
+	private void reevaluateReveals() {
+		revealedDice = new Vector<Integer>();
+		for (Player p : players) {
+			revealedDice.addAll(p.getRevealedDice());
+		}
+	}
+	
 	private boolean checkForCompletion() {
 		int playersRemainingCount = 0;
 		int i = 0;
@@ -662,6 +729,8 @@ public class callMyBluff {
 						
 						if (choice < 2) {
 							break;
+						} else {	//handle reroll
+							reevaluateReveals();
 						}
 					}/* else {
 						System.out.println("Player " + pTurn + " did not perform turn.");
@@ -685,21 +754,21 @@ public class callMyBluff {
 	public static void main(String[] args) {
 		System.out.println("Program Start\n\n\n");
 		//for (int i = 0; i < 1000; i++) {
-		//DateFormat df = new SimpleDateFormat("HH");
-		//DateFormat dfAlt = new SimpleDateFormat("HH:mm");
-		//int i = 0;
-		//for (Date dateobj = new Date(); !df.format(dateobj).equals("09"); dateobj = new Date()) {
-			//try {
-				//System.out.println("Game " + i);
+		DateFormat df = new SimpleDateFormat("HH");
+		DateFormat dfAlt = new SimpleDateFormat("HH:mm");
+		int i = 0;
+		for (Date dateobj = new Date(); !df.format(dateobj).equals("14"); dateobj = new Date()) {
+			try {
+				System.out.println("Game " + i);
 				callMyBluff cMB = new callMyBluff();
 				cMB.train();
-				//i++;
-			/*} catch (Exception e) {
+				i++;
+			} catch (Exception e) {
 				System.out.println("Error occurred at " + dfAlt.format(dateobj) + " during game " + i + ".");
 				e.printStackTrace();
 			}
 		}
 		System.out.println("###########################################################################\nTraining Complete\n###########################################################################");
-		System.out.println("Played " + i + " games.");*/
+		System.out.println("Played " + i + " games.");
 	}
 }
