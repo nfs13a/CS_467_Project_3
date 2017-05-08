@@ -16,6 +16,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
+import java.util.Scanner;
 import java.util.Stack;
 import java.util.Vector;
 
@@ -87,7 +88,7 @@ class Bet {
 	}
 	
 	public static Bet incrementBet(Bet current) {
-		if (current.getSpace() == 0) {
+		if (current.getSpace() <= 0) {
 			//System.out.println("Going past starting bet.");
 			return new Bet(1, 0, false);
 		}
@@ -98,6 +99,22 @@ class Bet {
 				return new Bet(current.getSpace() + 1, 0, false);
 			} else {
 				return new Bet((current.getSpace() + 1) / 2, 0, true);
+			}
+		}
+	}
+
+	public boolean greaterThan(Bet currentBet) {
+		if (isStar == currentBet.isStar()) {
+			if (space == currentBet.getSpace()) {
+				return number > currentBet.getNumber();
+			} else {
+				return space > currentBet.space;
+			}
+		} else {	//not on same type of space (Star vs Non-Star), so cannot be on same space
+			if (currentBet.isStar()) {
+				return space >= currentBet.getSpace() * 2;
+			} else {	//isStar
+				return !(currentBet.getSpace() >= space * 2);	//checks to see that currentBet's space is not ahead of this space. Since the bets cannot be on the same space in this condition, this works.
 			}
 		}
 	}
@@ -338,11 +355,11 @@ class Player {
 		
 		Bet newBet = new Bet(currentBet);
 		if (largest == 0) {
-			while (!newBet.isStar() || newBet.getSpace() == currentBet.getSpace()) {
+			while (newBet.getSpace() == 0 || !newBet.isStar() || newBet.getSpace() == currentBet.getSpace()) {
 				newBet = Bet.incrementBet(newBet);
 			}
 		} else {
-			while (newBet.isStar() || (newBet.getSpace() == currentBet.getSpace() && newBet.getNumber() <= currentBet.getNumber())) {
+			while (newBet.getSpace() == 0 || newBet.isStar() || (newBet.getSpace() == currentBet.getSpace() && newBet.getNumber() <= currentBet.getNumber())) {
 				newBet = Bet.incrementBet(newBet);
 			}
 			newBet.setNumber(largest);
@@ -366,7 +383,7 @@ class Player {
 	public Bet betBluff(Bet currentBet, Vector<Integer> revealedDice, int totalDice) {
 		Bet newBet = new Bet(currentBet);
 		
-		boolean numBetMaxed = currentBet.getNumber() == 5 || currentBet.isStar();
+		boolean numBetMaxed = currentBet.getNumber() == 5 || currentBet.isStar() || currentBet.getSpace() <= 0;
 		int rand = numBetMaxed ? (int) (Math.random() * 5 + 1) : (int) (Math.random() * 6); 
 		
 		for (int i = 0; i < rand; i++) {
@@ -454,9 +471,9 @@ class Player {
 		}
 	}
 	
-	void reroll(Vector<Integer> keep) {
+	void reroll(Vector<Boolean> reveals) {
 		for (int i = 0; i < dice.size(); i++) {
-			if (keep.contains(dice.get(i))) {
+			if (reveals.get(i)) {
 				revealedDice.set(i, true);
 			} else {
 				if (!revealedDice.get(i)) {	//this statement will never be necessary with good user input
@@ -543,6 +560,13 @@ class Player {
 	public void reset() {
 		states = null;
 	}
+
+	public void printDice() {
+		for (int i : dice) {
+			System.out.print("|" + i);
+		}
+		System.out.println("|");
+	}
 }
 
 /**
@@ -606,7 +630,7 @@ public class callMyBluff {
 		} else if (count > currentBet.getSpace()) {
 			players.elementAt(caller).loseDice(count - currentBet.getSpace());
 			totalDice -= count - currentBet.getSpace();
-			System.out.println("Bet was valid, " + caller + " loses " + (count - currentBet.getSpace()) + " dice.");
+			System.out.println("Bet was valid, Player " + caller + " loses " + (count - currentBet.getSpace()) + " dice.");
 			return caller;
 		} else {
 			players.elementAt(currentBet.getPerson()).loseDice(currentBet.getSpace() - count);
@@ -687,21 +711,113 @@ public class callMyBluff {
 		totalDice = players.size() * players.get(0).getDiceNum();
 	}
 	
-	void train() {
-			int pTurn = 0;
-			int counter = 0;
-			while (!checkForCompletion()) {
-				currentBet = new Bet();
-				previousBet = new Bet();
-				//System.out.println("Total Dice: " + totalDice);
-				totalDice = 0;
-				for (int i = 0; i < players.size(); i++) {
-					players.get(i).roll();
-					totalDice += players.get(i).getDiceNum();
-				}
-				while (true) {
-					System.out.println("It is Player " + pTurn + "'s turn.");
+	void human() {
+		//remove last computer so that human can fit in game
+		//players.remove(players.size() - 1);
+		System.out.println("Remember: a 0 is a star, and so is wild.");
+		int pTurn = 0;
+		int counter = 0;
+		Scanner input = new Scanner(System.in);
+		while (!checkForCompletion()) {
+			currentBet = new Bet();
+			previousBet = new Bet();
+			//System.out.println("Total Dice: " + totalDice);
+			totalDice = 0;
+			for (int i = 0; i < players.size(); i++) {
+				players.get(i).roll();
+				totalDice += players.get(i).getDiceNum();
+			}
+			while (true) {
+				if (pTurn == 0) { // human's turn
+					if (players.get(0).getDiceNum() <= 0) {
+						pTurn++;
+						System.out.println("You have no dice left.");
+						continue;
+					}
+					System.out.println("Human's turn.");
+					System.out.println("There are " + totalDice + " dice left in play.");
+					/*System.out.print("Dice of sides: |");
+					for (int i : revealedDice) {
+						System.out.print(i + "|");
+					}
+					System.out.println(" have been revealed.");*/
+					
+					for (int i = 1; i < players.size(); i++) {
+						if (players.get(i).getDiceNum() > 0 && players.get(i).getRevealedDice().size() > 0) {
+							System.out.print("Player " + i + " has revealed |");
+							for (int j : players.get(i).getRevealedDice()) {
+								System.out.print(j + "|");
+							}
+							System.out.println(" dice.");
+						}
+					}
+					System.out.print("Your dice are: ");
+					players.get(pTurn).printDice();
+					for (int i = 1; i < players.size(); i++) {
+						System.out.println("Player " + i + " has " + players.get(i).getDiceNum() + " dice.");
+					}
 					System.out.println("The current bet is " + currentBet.getSpace() + " " + currentBet.getNumber() + "'s.");
+					
+					String choice = "0";
+					if (currentBet.getSpace() == 0) {
+						System.out.println("You must bet");
+						choice = "3";
+					} else {
+						while ((choice.charAt(0) > 51 || choice.charAt(0) < 49) || choice.length() > 1) {
+							System.out.println("Choose (1) to call the bet, (2) to call spot-on, or (3) to bet.");
+							choice = input.nextLine();
+						}
+					}
+					
+					switch (choice) {
+						case "1": pTurn = handleCall(pTurn);  break;
+						case "2": pTurn = handleSpotOn(pTurn); break;
+						case "3":
+							int newSpace = 0;
+							int newNumber = 0;
+							Bet newBet = new Bet(newSpace, newNumber, false);
+							while (!newBet.greaterThan(currentBet) || newBet.getSpace() <= 0 || newBet.getNumber() > 5 || newBet.getNumber() < 0) {
+								System.out.println("Enter the space:");
+								newSpace = input.nextInt();
+								System.out.println("Enter the number:");
+								newNumber = input.nextInt();
+								newBet = new Bet(newSpace, newNumber, newNumber == 0);
+							}
+							previousBet = currentBet;
+							currentBet = newBet;
+							
+							if (currentBet.getSpace() <= 0) {
+								System.out.println("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\nError\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
+								System.out.println("Player " + pTurn + " make decision " + choice +  " and bet on " + currentBet.getSpace() + " " + currentBet.getNumber() + "'s.");
+								System.exit(0);
+							}
+							
+							System.out.println("Do you want to reroll (Y/N)?");
+							String decision = input.nextLine();
+							decision = input.nextLine();
+							if (decision.equalsIgnoreCase("Y")) {
+								System.out.println("Do you want to reveal any of your dice (Y/N)?");
+								decision = input.nextLine();
+								if (decision.equalsIgnoreCase("Y")) {
+									System.out.println("For each of your dice, enter a (0) to reroll or a (1) to reveal");
+									Vector<Boolean> reveals = new Vector<>();
+									for (int i = 0; i < players.get(pTurn).getDiceNum(); i++) {
+										int keepOrNot = input.nextInt();
+										reveals.add(keepOrNot == 1);
+									}
+									players.get(pTurn).reroll(reveals);
+								} else {
+									players.get(pTurn).reroll(new Vector<Boolean>(0));
+								}
+							} //else do nothing
+					}
+					if (choice.charAt(0) < 51) {
+						break;
+					} else {
+						reevaluateReveals();
+					}
+				} else {
+					System.out.println("It is Player " + pTurn + "'s turn.");
 					if (players.get(pTurn).getDiceNum() > 0) {
 						int choice = players.get(pTurn).chooseAction(currentBet, revealedDice, totalDice);
 						//System.out.println("choice: " + choice);
@@ -713,8 +829,8 @@ public class callMyBluff {
 						 * 3 - the player decides to bluff
 						 */
 						switch (choice) {
-							case 0: pTurn = handleCall(pTurn); break;
-							case 1: pTurn = handleSpotOn(pTurn); break;
+							case 0: System.out.println("Player " + pTurn + " calls the bluff!"); pTurn = handleCall(pTurn); break;
+							case 1: System.out.println("Player " + pTurn + " calls spot-on!"); pTurn = handleSpotOn(pTurn); break;
 							case 2: nextBet = players.get(pTurn).betProb(currentBet, revealedDice, totalDice);
 									nextBet.setPerson(pTurn);
 									break;
@@ -725,6 +841,13 @@ public class callMyBluff {
 						if (nextBet != null) {
 							previousBet = currentBet;
 							currentBet = nextBet;
+							System.out.println("Player " + pTurn + " bets " + currentBet.getSpace() + " " + currentBet.getNumber() + "'s.");
+						}
+						
+						if (currentBet.getSpace() <= 0) {
+							System.out.println("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\nError\n%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
+							System.out.println("Player " + pTurn + " make decision " + choice +  " and bet on " + currentBet.getSpace() + " " + currentBet.getNumber() + "'s.");
+							System.exit(0);
 						}
 						
 						if (choice < 2) {
@@ -732,43 +855,118 @@ public class callMyBluff {
 						} else {	//handle reroll
 							reevaluateReveals();
 						}
-					}/* else {
-						System.out.println("Player " + pTurn + " did not perform turn.");
-					}*/
-					
-					System.out.println("####################################\n");
-					pTurn = (pTurn + 1) % players.size();
-					counter++;
+					} else {
+						System.out.println("Player " + pTurn + " has no dice.");
+					}
 				}
-			}
-			
-			for (int i = 0; i < players.size(); i++) {
-				players.get(pTurn).learn(players.get(pTurn).getDiceNum() > 0);
-			}
-			
-			players.get(0).writeToFile();
-			
-			System.out.println("Player " + winner + " wins!");
-	}
-
-	public static void main(String[] args) {
-		System.out.println("Program Start\n\n\n");
-		//for (int i = 0; i < 1000; i++) {
-		DateFormat df = new SimpleDateFormat("HH");
-		DateFormat dfAlt = new SimpleDateFormat("HH:mm");
-		int i = 0;
-		for (Date dateobj = new Date(); !df.format(dateobj).equals("14"); dateobj = new Date()) {
-			try {
-				System.out.println("Game " + i);
-				callMyBluff cMB = new callMyBluff();
-				cMB.train();
-				i++;
-			} catch (Exception e) {
-				System.out.println("Error occurred at " + dfAlt.format(dateobj) + " during game " + i + ".");
-				e.printStackTrace();
+				
+				System.out.println("####################################\n");
+				pTurn = (pTurn + 1) % (players.size());
+				counter++;
 			}
 		}
-		System.out.println("###########################################################################\nTraining Complete\n###########################################################################");
-		System.out.println("Played " + i + " games.");
+		
+		for (int i = 1; i < players.size(); i++) {
+			players.get(pTurn).learn(players.get(pTurn).getDiceNum() > 0);
+		}
+		
+		players.get(1).writeToFile();
+		
+		System.out.println("Player " + winner + " wins!");
+	}
+	
+	void train() {
+		int pTurn = 0;
+		int counter = 0;
+		while (!checkForCompletion()) {
+			currentBet = new Bet();
+			previousBet = new Bet();
+			//System.out.println("Total Dice: " + totalDice);
+			totalDice = 0;
+			for (int i = 0; i < players.size(); i++) {
+				players.get(i).roll();
+				totalDice += players.get(i).getDiceNum();
+			}
+			while (true) {
+				System.out.println("It is Player " + pTurn + "'s turn.");
+				System.out.println("The current bet is " + currentBet.getSpace() + " " + currentBet.getNumber() + "'s.");
+				if (players.get(pTurn).getDiceNum() > 0) {
+					int choice = players.get(pTurn).chooseAction(currentBet, revealedDice, totalDice);
+					//System.out.println("choice: " + choice);
+					Bet nextBet = null;
+					/*
+					 * 0 - the player called the bluff
+					 * 1 - the player called Spot On
+					 * 2 - the player decides to bet based on probability
+					 * 3 - the player decides to bluff
+					 */
+					switch (choice) {
+						case 0: pTurn = handleCall(pTurn); break;
+						case 1: pTurn = handleSpotOn(pTurn); break;
+						case 2: nextBet = players.get(pTurn).betProb(currentBet, revealedDice, totalDice);
+								nextBet.setPerson(pTurn);
+								break;
+						case 3: nextBet = players.get(pTurn).betBluff(currentBet, revealedDice, totalDice);
+								nextBet.setPerson(pTurn);
+								break;
+					}
+					if (nextBet != null) {
+						previousBet = currentBet;
+						currentBet = nextBet;
+					}
+					
+					if (choice < 2) {
+						break;
+					} else {	//handle reroll
+						reevaluateReveals();
+					}
+				}/* else {
+					System.out.println("Player " + pTurn + " did not perform turn.");
+				}*/
+				
+				System.out.println("####################################\n");
+				pTurn = (pTurn + 1) % players.size();
+				counter++;
+			}
+		}
+		
+		for (int i = 0; i < players.size(); i++) {
+			players.get(pTurn).learn(players.get(pTurn).getDiceNum() > 0);
+		}
+		
+		players.get(0).writeToFile();
+		
+		System.out.println("Player " + winner + " wins!");
+	}
+	
+	public static void main(String[] args) {
+		Scanner input = new Scanner(System.in);
+		System.out.println("(P)lay a game with computers or (T)rain the agent?");
+		String choice = input.nextLine();
+		if (choice.equals("P")) {
+			callMyBluff cMB = new callMyBluff();
+			cMB.human();
+		} else if (choice.equals("T")) {
+			System.out.println("Program Start\n\n\n");
+			//for (int i = 0; i < 1000; i++) {
+			DateFormat df = new SimpleDateFormat("HH");
+			DateFormat dfAlt = new SimpleDateFormat("HH:mm");
+			int i = 0;
+			for (Date dateobj = new Date(); !dfAlt.format(dateobj).equals("23:00"); dateobj = new Date()) {
+				try {
+					System.out.println("Game " + i);
+					callMyBluff cMB = new callMyBluff();
+					cMB.train();
+					i++;
+				} catch (Exception e) {
+					System.out.println("Error occurred at " + dfAlt.format(dateobj) + " during game " + i + ".");
+					e.printStackTrace();
+				}
+			}
+			System.out.println("###########################################################################\nTraining Complete\n###########################################################################");
+			System.out.println("Played " + i + " games.");
+		} else {
+			System.out.println("Bad input; restart.");
+		}	
 	}
 }
