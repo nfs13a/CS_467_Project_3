@@ -223,6 +223,10 @@ class Player {
 	}
 	
 	public int chooseAction(Bet currentBet, Vector<Integer> rD, int totalDice) {	
+		if (currentBet.getSpace() > totalDice) {
+			return 0;
+		}
+		
 		if (currentBet.getSpace() == 0) {	//player gets first bet
 			return chooseFirstAction(currentBet, rD, totalDice);	//simplified version of code called in this method
 		}
@@ -266,6 +270,8 @@ class Player {
 			System.out.println("Error: calculated the incorrect total dice for state: " + currentState);
 		}
 		
+		System.out.println("Current state: " + currentState);
+		
 		//currentState is a string of number of (B)et dice, (N)ot bet dice, and (U)nknown dice
 		
 		//insert currentState with default .5 values if it has not been seen before
@@ -279,15 +285,28 @@ class Player {
 		double oddsSum = 0.0;
 		Double[] currentOdds = states.get(currentState);
 		//need to loop here to get the sum of the odds so that we can generate the random number to make the decision
-		for (double i : currentOdds) {
+		for (int i = 0; i < 4; i++) {
+			
+			if (currentOdds[i] > 1 && currentOdds[i] < 0) {
+				System.out.println("Check " + currentState);
+				Scanner input = new Scanner(System.in);
+				String stall = "";
+				while (!stall.equals("c")) {
+					stall = input.nextLine();
+				}
+				input.close();
+			}
+			
 			if (explorationVsEvaluation == 0) {
-				oddsSum += i;
+				oddsSum += currentOdds[i];
 			} else if (explorationVsEvaluation == 1) {	//exploration
-				oddsSum += 1 - i;
+				oddsSum += 1 - currentOdds[i];
 			} else {	//exploitation
-				oddsSum += 2 * i;
+				oddsSum += 2 * currentOdds[i];
 			}
 		}
+		
+		System.out.println("Sum for currentState: " + oddsSum);
 		
 		Random generator = new Random();
 		double stateChooser = generator.nextDouble() * oddsSum;
@@ -306,6 +325,7 @@ class Player {
 			}
 			
 			if (stateChooser >= oddsSum && stateChooser <= oddsSum + nextOdds) {
+				System.out.println("Choosing " + i + " because " + stateChooser + " is between " + oddsSum + " and " + (oddsSum + nextOdds));
 				decision = i;
 				break;
 			}
@@ -314,7 +334,7 @@ class Player {
 		}
 		
 		if (decision == -1) {
-			decision = 3;
+			decision = 0;
 		}
 		
 		chosenMoves.push(new Pair<String, Integer>(currentState,decision));
@@ -511,6 +531,7 @@ class Player {
 					if (move.getValue() == j) {
 						newOdds[j] = newOdds[j] + (diff[j] * ( learningFactor - decay * i) );
 						if (move.getValue() > 3) {	//rerolled in that turn, change basic decision value also
+							diff[j - 2] = 1 - newOdds[j - 2];
 							newOdds[j - 2] = newOdds[j - 2] + (diff[j - 2] * ( learningFactor - decay * i) );
 						}
 					}
@@ -522,7 +543,8 @@ class Player {
 					if (move.getValue() == j) {
 						newOdds[j] = newOdds[j] - (diff[j] * ( learningFactor - decay * i) );
 						if (move.getValue() > 3) {	//rerolled in that turn, change basic decision value also
-							newOdds[j - 2] = newOdds[j - 2] + (diff[j - 2] * ( learningFactor - decay * i) );
+							diff[j - 2] = newOdds[j - 2];
+							newOdds[j - 2] = newOdds[j - 2] - (diff[j - 2] * ( learningFactor - decay * i) );
 						}
 					}
 				}
@@ -900,6 +922,7 @@ public class callMyBluff {
 					 * 2 - the player decides to bet based on probability
 					 * 3 - the player decides to bluff
 					 */
+					System.out.println("Player " + pTurn + " made choice " + choice);
 					switch (choice) {
 						case 0: pTurn = handleCall(pTurn); break;
 						case 1: pTurn = handleSpotOn(pTurn); break;
@@ -913,6 +936,26 @@ public class callMyBluff {
 					if (nextBet != null) {
 						previousBet = currentBet;
 						currentBet = nextBet;
+					}
+					
+					if (currentBet.getSpace() > 30) {
+						System.out.println("$$$$$$$$$$$$$$$$$$$$$$\nError\n$$$$$$$$$$$$$$$$$$$$$$");
+						System.out.println("Bet found to be unreasonably large.");
+						System.out.println("Current bet: " + currentBet.getSpace() + " " + currentBet.getNumber() + "'s made by " + currentBet.getPerson());
+						System.out.println("Decision that got us here: " + choice);
+						System.out.println("Previous bet: " + previousBet.getSpace() + " " + previousBet.getNumber() + "'s made by " + previousBet.getPerson());
+						System.out.println("Total dice: " + totalDice);
+						
+						for (Player p : players) {
+							p.printDice();
+						}
+						
+						Scanner input = new Scanner(System.in);
+						String stall = "";
+						while (!stall.equals("c")) {
+							stall = input.nextLine();
+						}
+						input.close();
 					}
 					
 					if (choice < 2) {
@@ -952,7 +995,7 @@ public class callMyBluff {
 			DateFormat df = new SimpleDateFormat("HH");
 			DateFormat dfAlt = new SimpleDateFormat("HH:mm");
 			int i = 0;
-			for (Date dateobj = new Date(); !dfAlt.format(dateobj).equals("23:00"); dateobj = new Date()) {
+			for (Date dateobj = new Date(); !dfAlt.format(dateobj).equals("22:00"); dateobj = new Date()) {
 				try {
 					System.out.println("Game " + i);
 					callMyBluff cMB = new callMyBluff();
@@ -961,6 +1004,11 @@ public class callMyBluff {
 				} catch (Exception e) {
 					System.out.println("Error occurred at " + dfAlt.format(dateobj) + " during game " + i + ".");
 					e.printStackTrace();
+					String stall = "";
+					while (!stall.equals("c")) {
+						stall = input.nextLine();
+					}
+					input.close();
 				}
 			}
 			System.out.println("###########################################################################\nTraining Complete\n###########################################################################");

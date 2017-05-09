@@ -398,7 +398,7 @@ public class NoughtsAndCrosses {
 	}
 	
 	public void train() {
-		for (int i = 0; i < 100000; i++) {
+		for (int i = 0; i < 1000; i++) {
 			int j;
 			if (i % 5 == 0) {
 				j = -1;
