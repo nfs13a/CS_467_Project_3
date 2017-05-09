@@ -1,6 +1,6 @@
 This program requires Java 7 or 8 (I used 8, but it should be backwards compatible).
 
-Compile the program with "javac NoughtsAndCrosses.java" or "javac callMyBluff.java"
+Compile the program with "javac NoughtsAndCrosses.java" or "javac callMyBluff.java" (should be in a src/code folder)
 
 Run the program with "java NoughtsAndCrosses" or "java callMyBluff"
 
